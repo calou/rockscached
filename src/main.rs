@@ -14,9 +14,7 @@ use crate::configuration::Configuration;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut file = File::open("server.yml")?;
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
-    let config: Configuration = serde_yaml::from_str(&contents).unwrap();
+    let config: Configuration = serde_yaml::from_reader(&file).unwrap();
 
 
     let tcp_uri = format!("127.0.0.1:{}", config.port.borrow());
