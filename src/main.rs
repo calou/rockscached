@@ -16,17 +16,8 @@ use std::sync::{Arc, Mutex};
 use crate::db::Database;
 use crate::command::Command;
 
-/// The in-memory database shared amongst all clients.
-///
-/// This database will be shared via `Arc`, so to mutate the internal map we're
-/// going to use a `Mutex` for interior mutability.
-
-
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    // Parse the address we're going to run this server on
-    // and set up our TCP listener to accept connections.
     let addr = env::args()
         .nth(1)
         .unwrap_or_else(|| "127.0.0.1:8080".to_string());
@@ -34,11 +25,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut listener = TcpListener::bind(&addr).await?;
     println!("Listening on: {}", addr);
 
-    // Create the shared state of this server that will be shared amongst all
-    // clients. We populate the initial database and then create the `Database`
-    // structure. Note the usage of `Arc` here which will be used to ensure that
-    // each independently spawned client will have a reference to the in-memory
-    // database.
     let mut initial_db = HashMap::new();
     initial_db.insert("foo".to_string(), "bar".to_string());
     let db = Arc::new(Database {
@@ -56,10 +42,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             Ok(line) => {
                                 println!("Line: {}", line);
                                 let response = Command::handle(&line, &db);
-
-                                let response = response.serialize();
-
-                                if let Err(e) = lines.send(response.as_str()).await {
+                                let response_text = response.serialize();
+                                if let Err(e) = lines.send(response_text.as_str()).await {
                                     println!("error on sending response; error = {:?}", e);
                                 }
                             }
@@ -68,8 +52,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             }
                         }
                     }
-
-                    // The connection will be closed at this point as `lines.next()` has returned `None`.
                 });
             }
             Err(e) => println!("error accepting socket; error = {:?}", e),
