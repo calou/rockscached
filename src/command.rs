@@ -4,7 +4,7 @@ use crate::response::Response;
 
 pub enum Command {
     Get { key: String },
-    Set { key: String, value: String },
+    Set { key: String, value: Vec<u8> },
 }
 
 impl Command {
@@ -17,20 +17,22 @@ impl Command {
         let mut db = db.map.lock().unwrap();
         match request {
             Command::Get { key } => match db.get(&key) {
-                Some(value) => Response::Value {
+                Ok(Some(value)) => Response::Value {
                     key,
                     value: value.clone(),
                 },
-                None => Response::Error {
+                Ok(None) => Response::Error {
                     msg: format!("no key {}", key),
+                },
+                Err(e) =>  Response::Error {
+                    msg: format!("Erro {}", e),
                 },
             },
             Command::Set { key, value } => {
-                let previous = db.insert(key.clone(), value.clone());
+                let previous = db.put(key.clone(), value.clone());
                 Response::Set {
                     key,
                     value,
-                    previous,
                 }
             }
         }
@@ -58,7 +60,7 @@ impl Command {
                 };
                 Ok(Command::Set {
                     key: key.to_string(),
-                    value: value.to_string(),
+                    value: value.as_bytes().to_vec(),
                 })
             }
             Some(cmd) => Err(format!("unknown command: {}", cmd)),

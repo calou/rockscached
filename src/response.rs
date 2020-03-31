@@ -2,12 +2,11 @@
 pub enum Response {
     Value {
         key: String,
-        value: String,
+        value: Vec<u8>,
     },
     Set {
         key: String,
-        value: String,
-        previous: Option<String>,
+        value: Vec<u8>,
     },
     Error {
         msg: String,
@@ -17,12 +16,11 @@ pub enum Response {
 impl Response {
     pub fn serialize(&self) -> String {
         match *self {
-            Response::Value { ref key, ref value } => format!("{} = {}", key, value),
+            Response::Value { ref key, ref value } => format!("{} = {:?}", key, value),
             Response::Set {
                 ref key,
                 ref value,
-                ref previous,
-            } => format!("set {} = `{}`, previous: {:?}", key, value, previous),
+            } => format!("set {} = `{:?}`", key, value),
             Response::Error { ref msg } => format!("error: {}", msg),
         }
     }

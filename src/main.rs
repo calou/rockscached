@@ -13,6 +13,8 @@ use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
+use rocksdb::{DB, Options};
+
 use crate::db::Database;
 use crate::command::Command;
 
@@ -25,8 +27,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut listener = TcpListener::bind(&addr).await?;
     println!("Listening on: {}", addr);
 
-    let mut initial_db = HashMap::new();
-    initial_db.insert("foo".to_string(), "bar".to_string());
+    let path = "/tmp/rocksdb.db";
+    let initial_db = DB::open_default(path).unwrap();
+    initial_db.put(b"foo", b"bar").unwrap();
     let db = Arc::new(Database {
         map: Mutex::new(initial_db),
     });

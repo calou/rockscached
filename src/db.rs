@@ -1,6 +1,6 @@
 use std::sync::Mutex;
-use std::collections::HashMap;
+use rocksdb::{DB, Options};
 
 pub struct Database {
-    pub map: Mutex<HashMap<String, String>>,
+    pub map: Mutex<DB>,
 }
