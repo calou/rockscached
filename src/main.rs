@@ -12,8 +12,7 @@ use futures::SinkExt;
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
-use std::sync::{Arc, Mutex};
-use rocksdb::{DB, Options};
+use std::sync::Arc;
 
 use crate::db::Database;
 use crate::command::Command;
@@ -27,12 +26,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut listener = TcpListener::bind(&addr).await?;
     println!("Listening on: {}", addr);
 
-    let path = "/tmp/rocksdb.db";
-    let initial_db = DB::open_default(path).unwrap();
-    initial_db.put(b"foo", b"bar").unwrap();
-    let db = Arc::new(Database {
-        map: Mutex::new(initial_db),
-    });
+    let db = Database::open("/tmp/rocksdb.db");
 
     loop {
         match listener.accept().await {
