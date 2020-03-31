@@ -45,8 +45,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             Ok(line) => {
                                 println!("Line: {}", line);
                                 let response = Command::handle(&line, &db);
-                                let response_text = response.serialize();
-                                if let Err(e) = lines.send(response_text.as_str()).await {
+                                let response_bytes = response.serialize();
+                                if let Err(e) = lines.send(String::from_utf8_lossy(&response_bytes)).await {
                                     println!("error on sending response; error = {:?}", e);
                                 }
                             }

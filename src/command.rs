@@ -18,7 +18,6 @@ impl Command {
         match request {
             Command::Get { key } => match db.get(&key) {
                 Ok(Some(value)) => Response::Value {
-                    key,
                     value: value.clone(),
                 },
                 Ok(None) => Response::Error {
@@ -29,11 +28,8 @@ impl Command {
                 },
             },
             Command::Set { key, value } => {
-                let previous = db.put(key.clone(), value.clone());
-                Response::Set {
-                    key,
-                    value,
-                }
+                db.put(key.clone(), value.clone());
+                Response::Set
             }
         }
     }
