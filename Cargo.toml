@@ -14,3 +14,4 @@ futures = "0.3.4"
 tokio = { version = "0.2", features = ["full"] }
 tokio-util = { version = "0.3.1", features = ["full"] }
 rocksdb = { version = "0.13.0" }
+nom = "5.1.1"

@@ -1,11 +1,34 @@
 use std::sync::Arc;
-use crate::db::Database;
+use crate::db::{Database, insert};
 use crate::response::Response;
+use crate::command::Command::MemcachedSet;
+use crate::parser;
 
+#[derive(PartialEq, Debug)]
 pub enum Command {
     Get { key: String },
     Set { key: String, value: Vec<u8> },
+    MemcachedSet { key: &'static [u8], flags: &'static [u8], expiration_timestamp: u64, value: &'static [u8] },
 }
+
+pub trait MemcachedCommand {
+    fn execute(self, db: &Arc<Database>) -> Result<String, String>;
+}
+
+#[derive(PartialEq, Debug)]
+pub struct MemcachedCommandSet<'a> {
+    key: &'a[u8],
+    flags: &'a[u8],
+    expiration_timestamp: u64,
+    value: &'a[u8],
+}
+
+impl<'a> MemcachedCommand for MemcachedCommandSet<'a> {
+    fn execute(self, db: &Arc<Database>) -> Result<String, String> {
+        unimplemented!()
+    }
+}
+
 
 impl Command {
     pub fn handle(line: &str, db: &Arc<Database>) -> Response {
@@ -14,22 +37,25 @@ impl Command {
             Err(e) => return Response::Error { msg: e },
         };
 
-        let mut db = db.map.lock().unwrap();
+
+        let rocksdb = db.map.lock().unwrap();
         match request {
-            Command::Get { key } => match db.get(&key) {
+            Command::Get { key } => match rocksdb.get(&key) {
                 Ok(Some(value)) => Response::Value {
                     value: value.clone(),
                 },
-                Ok(None) => Response::Error {
-                    msg: format!("no key {}", key),
-                },
-                Err(e) =>  Response::Error {
-                    msg: format!("Erro {}", e),
+                Ok(None) => Response::NotFoundError,
+                Err(e) => Response::Error {
+                    msg: format!("Error {}", e),
                 },
             },
             Command::Set { key, value } => {
-                db.put(key.clone(), value.clone());
-                Response::Set
+                rocksdb.put(key.clone(), value.clone());
+                Response::Stored
+            }
+            Command::MemcachedSet { key, flags, expiration_timestamp, value } => {
+                insert(rocksdb, key, flags, expiration_timestamp, value);
+                Response::Stored
             }
         }
     }
@@ -63,5 +89,11 @@ impl Command {
             None => Err("empty input".into()),
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
 }
 

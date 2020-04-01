@@ -3,10 +3,12 @@
 mod command;
 mod db;
 mod response;
+mod parser;
+
 
 use tokio::net::TcpListener;
 use tokio::stream::StreamExt;
-use tokio_util::codec::{Framed, LinesCodec};
+use tokio_util::codec::{Framed, LinesCodec, BytesCodec};
 
 use futures::SinkExt;
 use std::collections::HashMap;
@@ -30,7 +32,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     loop {
         match listener.accept().await {
-            Ok((socket, _)) => {
+            Ok((socket, client_addr)) => {
+                println!("Establing connection with {:?}", client_addr);
                 let db = db.clone();
                 tokio::spawn(async move {
                     let mut lines = Framed::new(socket, LinesCodec::new());
