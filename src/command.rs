@@ -1,42 +1,23 @@
 use std::sync::Arc;
 use crate::db::{Database, insert};
 use crate::response::Response;
-use crate::command::Command::MemcachedSet;
 use crate::parser;
 
 #[derive(PartialEq, Debug)]
-pub enum Command {
+pub enum Command<'a> {
     Get { key: String },
     Set { key: String, value: Vec<u8> },
-    MemcachedSet { key: &'static [u8], flags: &'static [u8], expiration_timestamp: u64, value: &'static [u8] },
+    MGet { key: &'a[u8] },
+    MSet { key: &'a[u8], flags:&'a[u8], ttl: u64, value:&'a[u8] },
 }
 
-pub trait MemcachedCommand {
-    fn execute(self, db: &Arc<Database>) -> Result<String, String>;
-}
-
-#[derive(PartialEq, Debug)]
-pub struct MemcachedCommandSet<'a> {
-    key: &'a[u8],
-    flags: &'a[u8],
-    expiration_timestamp: u64,
-    value: &'a[u8],
-}
-
-impl<'a> MemcachedCommand for MemcachedCommandSet<'a> {
-    fn execute(self, db: &Arc<Database>) -> Result<String, String> {
-        unimplemented!()
-    }
-}
-
-
-impl Command {
+impl<'a> Command<'a> {
     pub fn handle(line: &str, db: &Arc<Database>) -> Response {
+
         let request = match Command::parse(&line) {
             Ok(req) => req,
             Err(e) => return Response::Error { msg: e },
         };
-
 
         let rocksdb = db.map.lock().unwrap();
         match request {
@@ -52,11 +33,20 @@ impl Command {
             Command::Set { key, value } => {
                 rocksdb.put(key.clone(), value.clone());
                 Response::Stored
-            }
-            Command::MemcachedSet { key, flags, expiration_timestamp, value } => {
-                insert(rocksdb, key, flags, expiration_timestamp, value);
+            },
+            Command::MGet { key } => match rocksdb.get(key) {
+                Ok(Some(value)) => Response::Value {
+                    value: value.clone(),
+                },
+                Ok(None) => Response::NotFoundError,
+                Err(e) => Response::Error {
+                    msg: format!("Error {}", e),
+                },
+            },
+            Command::MSet { key, flags, ttl: expiration, value } => {
+                rocksdb.put(key.clone(), value.clone());
                 Response::Stored
-            }
+            },
         }
     }
     fn parse(input: &str) -> Result<Command, String> {
