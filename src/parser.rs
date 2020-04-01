@@ -1,26 +1,15 @@
-extern crate nom;
+use nom;
 
-use byteorder::{BigEndian, ReadBytesExt};
-use crate::command::{Command};
+use std::str::FromStr;
+use crate::command::Command;
 use nom::{
     IResult,
     bytes::complete::{tag, take_until, take_while, take_while1, is_not},
-    combinator::map_res,
     number::streaming::be_u64,
     sequence::tuple,
-    character::complete::{crlf, space1},
+    branch::alt,
+    character::complete::{crlf, space1, digit1},
 };
-use self::nom::bytes::complete::is_a;
-use self::nom::character::complete::digit1;
-use self::nom::error::{ErrorKind, ParseError, VerboseErrorKind, VerboseError};
-use std::num::ParseIntError;
-use self::nom::lib::std::str::ParseBoolError;
-use std::error::Error;
-use self::nom::combinator::map;
-use self::nom::branch::alt;
-use self::nom::lib::std::slice::ChunksMut;
-use std::str::FromStr;
-use serde_yaml::to_vec;
 
 #[derive(PartialEq, Debug)]
 struct RawCommand<'a> {
@@ -37,10 +26,10 @@ fn _parse_set<'a>(input: &'a [u8]) -> IResult<&'a [u8], (&[u8], &[u8], &[u8], &[
     Ok((input, (v, k, f, e, val)))
 }
 
-fn parse_set<'a>(input: &'a [u8]) -> IResult<&'a[u8], RawCommand> {
+fn parse_set<'a>(input: &'a [u8]) -> IResult<&'a[u8], RawCommand<'_>> {
     match _parse_set(input){
         Ok((input, (v, key, flags, expiration_timestamp, value))) => {
-                (Ok((input, RawCommand {verb: String::from_utf8(v.to_vec()).unwrap(), args: vec![key, flags, expiration_timestamp, value]})))
+                Ok((input, RawCommand {verb: String::from_utf8(v.to_vec()).unwrap(), args: vec![key, flags, expiration_timestamp, value]}))
             },
         Err(e) => Result::Err(e)
     }
@@ -51,23 +40,23 @@ fn _parse_get<'a>(input: &'a [u8]) -> IResult<&'a [u8], (&[u8], &[u8])> {
     Ok((input, (v,k)))
 }
 
-fn parse_get<'a>(input: &'a [u8]) -> IResult<&'a[u8], RawCommand> {
+fn parse_get<'a>(input: &'a [u8]) -> IResult<&'a[u8], RawCommand<'_>> {
     match _parse_get(input){
         Ok((input, (v, key))) => {
-            (Ok((input, RawCommand {verb: String::from_utf8(v.to_vec()).unwrap(), args: vec![key]})))
+            Ok((input, RawCommand {verb: String::from_utf8(v.to_vec()).unwrap(), args: vec![key]}))
         },
         Err(e) => Result::Err(e)
     }
 }
 
-fn parse_raw_command<'a>(input: &'a [u8]) -> IResult<&'a[u8], RawCommand> {
+fn parse_raw_command<'a>(input: &'a [u8]) -> IResult<&'a[u8], RawCommand<'_>> {
     let (input, cmd) = alt((parse_get, parse_set))(input)?;
     Ok((input, cmd))
 }
 
-pub fn parse<'a>(input: &'a[u8]) -> Result<Command, String> {
+pub fn parse(input: &[u8]) -> Result<Command, String> {
     match parse_raw_command(input){
-        Ok((input, cmd)) => {
+        Ok((_input, cmd)) => {
             match cmd.verb.as_str() {
                 "get" => Ok(Command::MGet {key: cmd.args[0]}),
                 "set" => {
@@ -90,7 +79,7 @@ mod tests {
 
     #[test]
     fn parse_set_simple() {
-        let (input, parts) = _parse_set(b"set myKey 0 60 the value to store\r\n").ok().unwrap();
+        let (_input, parts) = _parse_set(b"set myKey 0 60 the value to store\r\n").ok().unwrap();
         assert_eq!(parts.0, b"set");
         assert_eq!(parts.1, b"myKey");
         assert_eq!(parts.2, b"0");
@@ -100,32 +89,32 @@ mod tests {
 
     #[test]
     fn parse_set_obj_simple() {
-        let (input, cmd) = parse_set(b"set myKey 0 60 the value to store\r\n").ok().unwrap();
+        let (_input, cmd) = parse_set(b"set myKey 0 60 the value to store\r\n").ok().unwrap();
         assert_eq!(cmd, RawCommand { verb: String::from("set"),  args: vec![b"myKey", b"0", b"60", b"the value to store"]});
     }
 
     #[test]
     fn parse_get_simple() {
-        let (input, (verb, key)) = _parse_get(b"get myKey\r\n").ok().unwrap();
+        let (_input, (verb, key)) = _parse_get(b"get myKey\r\n").ok().unwrap();
         assert_eq!(verb, b"get");
         assert_eq!(key, b"myKey");
     }
 
     #[test]
     fn parse_get_obj_simple() {
-        let (input, cmd) = parse_get(b"get myKey\r\n").ok().unwrap();
+        let (_input, cmd) = parse_get(b"get myKey\r\n").ok().unwrap();
         assert_eq!(cmd, RawCommand { verb: String::from("get"),  args: vec![b"myKey"]});
     }
 
     #[test]
     fn parse_raw_command_simple_get() {
-        let (input, cmd) = parse_raw_command(b"get myKey\r\n").ok().unwrap();
+        let (_input, cmd) = parse_raw_command(b"get myKey\r\n").ok().unwrap();
         assert_eq!(cmd, RawCommand { verb: String::from("get"),  args: vec![b"myKey"]});
     }
 
     #[test]
     fn parse_raw_command_simple_set() {
-        let (input, cmd) = parse_raw_command(b"set myKey 0 60 the value to store\r\n").ok().unwrap();
+        let (_input, cmd) = parse_raw_command(b"set myKey 0 60 the value to store\r\n").ok().unwrap();
         assert_eq!(cmd, RawCommand { verb: String::from("set"),  args: vec![b"myKey", b"0", b"60", b"the value to store"]});
     }
 

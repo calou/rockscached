@@ -1,5 +1,5 @@
 use std::sync::{Mutex, Arc, MutexGuard};
-use rocksdb::{DB, Options};
+use rocksdb::{DB};
 
 pub struct Database {
     pub map: Mutex<DB>,
@@ -15,6 +15,6 @@ impl Database {
     }
 }
 
-pub fn insert( db: MutexGuard<DB>, key: &'static[u8], flags: &'static[u8],  expiration_timestamp: u64, value: &'static[u8]) {
+pub fn insert( _db: MutexGuard<'_, DB>, _key: &'static[u8], _flags: &'static[u8],  _expiration_timestamp: u64, _value: &'static[u8]) {
     // TODO
 }

@@ -1,23 +1,22 @@
-
 #![warn(rust_2018_idioms)]
 mod command;
 mod db;
 mod response;
 mod parser;
 
-
 use tokio::net::TcpListener;
 use tokio::stream::StreamExt;
-use tokio_util::codec::{Framed, LinesCodec, BytesCodec};
-
+use tokio_util::codec::{Framed, BytesCodec, Decoder};
+use bytes::{Bytes, BytesMut, BufMut};
 use futures::SinkExt;
-use std::collections::HashMap;
+
 use std::env;
 use std::error::Error;
-use std::sync::Arc;
+
 
 use crate::db::Database;
 use crate::command::Command;
+
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -36,14 +35,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 println!("Establing connection with {:?}", client_addr);
                 let db = db.clone();
                 tokio::spawn(async move {
-                    let mut lines = Framed::new(socket, LinesCodec::new());
-                    while let Some(result) = lines.next().await {
+                    let mut framed = Framed::new(socket, BytesCodec::new());
+
+                    while let Some(result) = framed.next().await {
                         match result {
                             Ok(line) => {
-                                println!("Line: {}", line);
                                 let response = Command::handle(&line, &db);
                                 let response_bytes = response.serialize();
-                                if let Err(e) = lines.send(String::from_utf8_lossy(&response_bytes)).await {
+                                let mut bytes = BytesMut::new();
+                                bytes.put(&response_bytes[..]);
+                                bytes.put_slice(b"\r\n");
+                                if let Err(e) = framed.send(bytes.freeze()).await {
                                     println!("error on sending response; error = {:?}", e);
                                 }
                             }
