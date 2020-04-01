@@ -4,8 +4,7 @@ use std::str::FromStr;
 use crate::command::Command;
 use nom::{
     IResult,
-    bytes::complete::{tag, take_until, take_while, take_while1, is_not},
-    number::streaming::be_u64,
+    bytes::complete::{tag, take_until, is_not},
     sequence::tuple,
     branch::alt,
     character::complete::{crlf, space1, digit1},
@@ -54,7 +53,7 @@ fn parse_raw_command<'a>(input: &'a [u8]) -> IResult<&'a[u8], RawCommand<'_>> {
     Ok((input, cmd))
 }
 
-pub fn parse(input: &[u8]) -> Result<Command, String> {
+pub fn parse(input: &[u8]) -> Result<Command<'_>, String> {
     match parse_raw_command(input){
         Ok((_input, cmd)) => {
             match cmd.verb.as_str() {

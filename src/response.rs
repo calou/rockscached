@@ -1,6 +1,3 @@
-
-
-
 #[derive(PartialEq)]
 pub enum Response {
     Value {

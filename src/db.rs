@@ -14,7 +14,3 @@ impl Database {
         })
     }
 }
-
-pub fn insert( _db: MutexGuard<'_, DB>, _key: &'static[u8], _flags: &'static[u8],  _expiration_timestamp: u64, _value: &'static[u8]) {
-    // TODO
-}

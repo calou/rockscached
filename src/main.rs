@@ -6,8 +6,8 @@ mod parser;
 
 use tokio::net::TcpListener;
 use tokio::stream::StreamExt;
-use tokio_util::codec::{Framed, BytesCodec, Decoder};
-use bytes::{Bytes, BytesMut, BufMut};
+use tokio_util::codec::{Framed, BytesCodec};
+use bytes::{BytesMut, BufMut};
 use futures::SinkExt;
 
 use std::env;
