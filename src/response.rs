@@ -1,3 +1,5 @@
+use bytes::Bytes;
+
 #[derive(PartialEq)]
 pub enum Response {
     Value {
@@ -12,13 +14,14 @@ pub enum Response {
 }
 
 impl Response {
-    pub fn serialize(&self) -> Vec<u8> {
+    pub fn serialize(&self) -> Bytes {
+
         match *self {
-            Response::Value { ref value } => value.clone(),
-            Response::Stored => b"STORED".to_vec(),
-            Response::NotFoundError => b"NOT_FOUND".to_vec(),
-            Response::ServerError => b"SERVER_ERROR".to_vec(),
-            Response::Error { ref msg } => msg.as_bytes().to_vec(),
+            Response::Value { ref value } => Bytes::from(value.clone()),
+            Response::Stored => Bytes::from("STORED\r\n"),
+            Response::NotFoundError => Bytes::from("END\r\n"),
+            Response::ServerError => Bytes::from("SERVER_ERROR"),
+            _ => Bytes::from("SERVER_ERROR"),
         }.to_owned()
     }
 }

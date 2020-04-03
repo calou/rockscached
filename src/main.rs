@@ -7,7 +7,6 @@ mod parser;
 use tokio::net::TcpListener;
 use tokio::stream::StreamExt;
 use tokio_util::codec::{Framed, BytesCodec};
-use bytes::{BytesMut, BufMut};
 use futures::SinkExt;
 
 use std::env;
@@ -42,10 +41,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             Ok(line) => {
                                 let response = Command::handle(&line, &db);
                                 let response_bytes = response.serialize();
-                                let mut bytes = BytesMut::new();
-                                bytes.put(&response_bytes[..]);
-                                bytes.put_slice(b"\r\n");
-                                if let Err(e) = framed.send(bytes.freeze()).await {
+                                if let Err(e) = framed.send(response_bytes).await {
                                     println!("error on sending response; error = {:?}", e);
                                 }
                             }

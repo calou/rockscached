@@ -21,7 +21,7 @@ fn not_space(s: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 fn _parse_set<'a>(input: &'a [u8]) -> IResult<&'a [u8], (&[u8], &[u8], &[u8], &[u8], &[u8])> {
-    let (input, (v, _, k, _, f, _,   e, _, val, _)) = tuple((tag("set"), space1, not_space, space1, not_space, space1, digit1, space1, take_until("\r\n"), crlf))(input)?;
+    let (input, (v, _, k, _, f, _,   e, _, _, _, val, _)) = tuple((tag("set"), space1, not_space, space1, not_space, space1, digit1, space1, digit1, crlf, take_until("\r\n"), crlf))(input)?;
     Ok((input, (v, k, f, e, val)))
 }
 
@@ -88,8 +88,8 @@ mod tests {
 
     #[test]
     fn parse_set_obj_simple() {
-        let (_input, cmd) = parse_set(b"set myKey 0 60 the value to store\r\n").ok().unwrap();
-        assert_eq!(cmd, RawCommand { verb: String::from("set"),  args: vec![b"myKey", b"0", b"60", b"the value to store"]});
+        let (_input, cmd) = parse_set(b"set myKey 0 60 19\r\nthe value to store\r\n").ok().unwrap();
+        assert_eq!(cmd, RawCommand { verb: String::from("set"),  args: vec![b"myKey", b"0", b"60", b"19", b"the value to store"]});
     }
 
     #[test]
@@ -113,8 +113,8 @@ mod tests {
 
     #[test]
     fn parse_raw_command_simple_set() {
-        let (_input, cmd) = parse_raw_command(b"set myKey 0 60 the value to store\r\n").ok().unwrap();
-        assert_eq!(cmd, RawCommand { verb: String::from("set"),  args: vec![b"myKey", b"0", b"60", b"the value to store"]});
+        let (_input, cmd) = parse_raw_command(b"set myKey 0 60 19\r\nthe value to store\r\n").ok().unwrap();
+        assert_eq!(cmd, RawCommand { verb: String::from("set"),  args: vec![b"myKey", b"0", b"60", b"19", b"the value to store"]});
     }
 
     #[test]
@@ -130,7 +130,7 @@ mod tests {
 
     #[test]
     fn parse_for_set() {
-        let result = parse(b"set myKey 0 60 the value to store\r\n");
+        let result = parse(b"set myKey 0 60 19\r\nthe value to store\r\n");
         assert_eq!(result.unwrap(), Command::MSet {key: b"myKey", flags: b"0", ttl: 60u64, value: b"the value to store"});
     }
 }
