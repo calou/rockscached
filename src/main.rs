@@ -3,6 +3,7 @@ mod command;
 mod db;
 mod response;
 mod parser;
+mod byte_utils;
 
 use tokio::net::TcpListener;
 use tokio::stream::StreamExt;
