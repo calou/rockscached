@@ -23,7 +23,7 @@ impl Database {
 
     pub fn get(&self, key: &[u8]) -> Response {
         let rocksdb = self.map.lock().unwrap();
-        match rocksdb.get(key.clone()) {
+        match rocksdb.get(key) {
             Ok(Some(value)) => format_get_response(key, &value),
             Ok(None) => Response::NotFoundError,
             Err(e) => Response::Error {
@@ -42,7 +42,7 @@ impl Database {
         bytes_mut.put_slice(&flag_bytes);
         bytes_mut.put_slice(value);
         let rocksdb = self.map.lock().unwrap();
-        match rocksdb.put(key.clone(), bytes_mut.bytes()) {
+        match rocksdb.put(key, bytes_mut.bytes()) {
             Ok(()) => Response::Stored,
             _ => Response::ServerError,
         }
@@ -59,7 +59,7 @@ fn format_get_response(key: &[u8], value: &[u8]) -> Response {
         let flag = BigEndian::read_u32(&value[8..12]);
 
         resp.put_slice(b"VALUE ");
-        resp.put_slice(key.clone());
+        resp.put_slice(key);
         resp.put_slice(b" ");
         resp.put_slice(&flag.to_string().into_bytes());
         resp.put_slice(b" ");
