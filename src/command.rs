@@ -6,10 +6,10 @@ use crate::parser::parse;
 #[derive(PartialEq, Debug)]
 pub enum Command<'a> {
     MGet { key: &'a [u8] },
-    MSet { key: &'a [u8], flags: &'a [u8], ttl: u64, value: &'a [u8] },
-    MAdd { key: &'a [u8], flags: &'a [u8], ttl: u64, value: &'a [u8] },
-    MAppend { key: &'a [u8], flags: &'a [u8], ttl: u64, value: &'a [u8] },
-    MPrepend { key: &'a [u8], flags: &'a [u8], ttl: u64, value: &'a [u8] },
+    MSet { key: &'a [u8], flags: u32, ttl: u64, value: &'a [u8] },
+    MAdd { key: &'a [u8], flags: u32, ttl: u64, value: &'a [u8] },
+    MAppend { key: &'a [u8], flags: u32, ttl: u64, value: &'a [u8] },
+    MPrepend { key: &'a [u8], flags: u32, ttl: u64, value: &'a [u8] },
 }
 
 

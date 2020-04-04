@@ -1,6 +1,5 @@
 use nom;
 
-use std::str::FromStr;
 use crate::command::Command;
 use nom::{
     IResult,
@@ -9,7 +8,7 @@ use nom::{
     branch::alt,
     character::complete::{crlf, space1, digit1},
 };
-use crate::byte_utils::bytes_to_u64;
+use crate::byte_utils::{bytes_to_u64, bytes_to_u32};
 
 #[derive(PartialEq, Debug)]
 struct RawCommand<'a> {
@@ -26,7 +25,7 @@ fn setting_tag<'a>(input: &'a [u8]) -> IResult<&'a [u8], &[u8]> {
 }
 
 fn _parse_set<'a>(input: &'a [u8]) -> IResult<&'a [u8], (&[u8], &[u8], &[u8], &[u8], &[u8])> {
-    let (input, (v, _, k, _, f, _,   e, _, _, _, val, _)) = tuple((setting_tag, space1, not_space, space1, not_space, space1, digit1, space1, digit1, crlf, take_until("\r\n"), crlf))(input)?;
+    let (input, (v, _, k, _, f, _,   e, _, _, _, val, _)) = tuple((setting_tag, space1, not_space, space1, digit1, space1, digit1, space1, digit1, crlf, take_until("\r\n"), crlf))(input)?;
     Ok((input, (v, k, f, e, val)))
 }
 
@@ -63,10 +62,10 @@ pub fn parse(input: &[u8]) -> Result<Command<'_>, String> {
         Ok((_input, cmd)) => {
             match cmd.verb.as_str() {
                 "get" => Ok(Command::MGet {key: cmd.args[0]}),
-                "set" => Ok(Command::MSet {key: cmd.args[0], flags: cmd.args[1], ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3]}),
-                "add" => Ok(Command::MAdd {key: cmd.args[0], flags: cmd.args[1], ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3]}),
-                "append" => Ok(Command::MAppend {key: cmd.args[0], flags: cmd.args[1], ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3]}),
-                "prepend" => Ok(Command::MPrepend {key: cmd.args[0], flags: cmd.args[1], ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3]}),
+                "set" => Ok(Command::MSet {key: cmd.args[0], flags: bytes_to_u32(cmd.args[1]), ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3]}),
+                "add" => Ok(Command::MAdd {key: cmd.args[0], flags: bytes_to_u32(cmd.args[1]), ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3]}),
+                "append" => Ok(Command::MAppend {key: cmd.args[0], flags: bytes_to_u32(cmd.args[1]), ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3]}),
+                "prepend" => Ok(Command::MPrepend {key: cmd.args[0], flags: bytes_to_u32(cmd.args[1]), ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3]}),
                 _ => Err(String::from("Invalid command"))
             }
         }
@@ -94,12 +93,12 @@ mod tests {
     #[test]
     fn parse_for_set() {
         let result = parse(b"set myKey 0 60 19\r\nthe value to store\r\n");
-        assert_eq!(result.unwrap(), Command::MSet {key: b"myKey", flags: b"0", ttl: 60u64, value: b"the value to store"});
+        assert_eq!(result.unwrap(), Command::MSet {key: b"myKey", flags: 0, ttl: 60u64, value: b"the value to store"});
     }
 
     #[test]
     fn parse_for_add() {
         let result = parse(b"add myKey 0 60 19\r\nthe value to store\r\n");
-        assert_eq!(result.unwrap(), Command::MAdd {key: b"myKey", flags: b"0", ttl: 60u64, value: b"the value to store"});
+        assert_eq!(result.unwrap(), Command::MAdd {key: b"myKey", flags: 0, ttl: 60u64, value: b"the value to store"});
     }
 }
