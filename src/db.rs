@@ -32,22 +32,7 @@ impl Database {
                     Response::NotFoundError
                 } else {
                     match rocksdb.get(key.clone()) {
-                        Ok(Some(value)) => {
-                            let mut resp = BytesMut::new();
-
-                            let length = value.len() as u32;
-
-                            resp.put_slice(b"VALUE ");
-                            resp.put_slice(key.clone());
-                            resp.put_slice(b" 0 ");
-                            resp.put_slice(&length.to_string().into_bytes());
-                            resp.put_slice(b"\r\n");
-                            resp.put_slice(&value.clone());
-                            resp.put_slice(b"\r\nEND\r\n");
-                            Response::Value {
-                                value: resp.bytes().to_vec(),
-                            }
-                        },
+                        Ok(Some(value)) => format_get_response(key, b"0", &value),
                         Ok(None) => Response::NotFoundError,
                         Err(e) => Response::Error {
                             msg: format!("Error {}", e),
@@ -62,7 +47,7 @@ impl Database {
         }
     }
 
-    pub fn insert(&self, key: &[u8], flags: &[u8], ttl: u64, value:&[u8]) -> Response {
+    pub fn insert(&self, key: &[u8], flags: &[u8], ttl: u64, value: &[u8]) -> Response {
         let exp_key = get_prefixed_key(EXPIRATION_PREFIX, key.clone());
         let deadline = current_second() + ttl;
 
@@ -79,6 +64,22 @@ impl Database {
     }
 }
 
+fn format_get_response(key: &[u8], flags: &[u8], value: &[u8]) -> Response {
+    let mut resp = BytesMut::new();
+    let length = value.len() as u32;
+    resp.put_slice(b"VALUE ");
+    resp.put_slice(key.clone());
+    resp.put_slice(b" ");
+    resp.put_slice(flags);
+    resp.put_slice(b" ");
+    resp.put_slice(&length.to_string().into_bytes());
+    resp.put_slice(b"\r\n");
+    resp.put_slice(value.clone());
+    resp.put_slice(b"\r\nEND\r\n");
+    Response::Value {
+        value: resp.bytes().to_vec(),
+    }
+}
 
 fn get_prefixed_key(prefix: &[u8], key: &[u8]) -> Vec<u8> {
     let mut bytes_mut = BytesMut::with_capacity(key.to_owned().len() + prefix.len());
@@ -93,4 +94,5 @@ fn current_second() -> u64 {
 
 
 unsafe impl Send for Database {}
+
 unsafe impl Sync for Database {}
