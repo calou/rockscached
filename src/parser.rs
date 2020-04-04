@@ -61,11 +61,11 @@ pub fn parse(input: &[u8]) -> Result<Command<'_>, String> {
     match parse_raw_command(input){
         Ok((_input, cmd)) => {
             match cmd.verb.as_str() {
-                "get" => Ok(Command::MGet {key: cmd.args[0]}),
-                "set" => Ok(Command::MSet {key: cmd.args[0], flags: bytes_to_u32(cmd.args[1]), ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3]}),
-                "add" => Ok(Command::MAdd {key: cmd.args[0], flags: bytes_to_u32(cmd.args[1]), ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3]}),
-                "append" => Ok(Command::MAppend {key: cmd.args[0], flags: bytes_to_u32(cmd.args[1]), ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3]}),
-                "prepend" => Ok(Command::MPrepend {key: cmd.args[0], flags: bytes_to_u32(cmd.args[1]), ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3]}),
+                "get" => Ok(Command::Get {key: cmd.args[0]}),
+                "set" => Ok(Command::Set {key: cmd.args[0], flags: bytes_to_u32(cmd.args[1]), ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3]}),
+                "add" => Ok(Command::Add {key: cmd.args[0], flags: bytes_to_u32(cmd.args[1]), ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3]}),
+                "append" => Ok(Command::Append {key: cmd.args[0], flags: bytes_to_u32(cmd.args[1]), ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3]}),
+                "prepend" => Ok(Command::Prepend {key: cmd.args[0], flags: bytes_to_u32(cmd.args[1]), ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3]}),
                 _ => Err(String::from("Invalid command"))
             }
         }
@@ -87,18 +87,18 @@ mod tests {
     #[test]
     fn parse_for_get() {
         let result = parse(b"get myKey\r\n");
-        assert_eq!(result.unwrap(), Command::MGet {key: b"myKey"});
+        assert_eq!(result.unwrap(), Command::Get {key: b"myKey"});
     }
 
     #[test]
     fn parse_for_set() {
         let result = parse(b"set myKey 0 60 19\r\nthe value to store\r\n");
-        assert_eq!(result.unwrap(), Command::MSet {key: b"myKey", flags: 0, ttl: 60u64, value: b"the value to store"});
+        assert_eq!(result.unwrap(), Command::Set {key: b"myKey", flags: 0, ttl: 60u64, value: b"the value to store"});
     }
 
     #[test]
     fn parse_for_add() {
         let result = parse(b"add myKey 0 60 19\r\nthe value to store\r\n");
-        assert_eq!(result.unwrap(), Command::MAdd {key: b"myKey", flags: 0, ttl: 60u64, value: b"the value to store"});
+        assert_eq!(result.unwrap(), Command::Add {key: b"myKey", flags: 0, ttl: 60u64, value: b"the value to store"});
     }
 }

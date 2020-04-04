@@ -5,14 +5,12 @@ use crate::parser::parse;
 
 #[derive(PartialEq, Debug)]
 pub enum Command<'a> {
-    MGet { key: &'a [u8] },
-    MSet { key: &'a [u8], flags: u32, ttl: u64, value: &'a [u8] },
-    MAdd { key: &'a [u8], flags: u32, ttl: u64, value: &'a [u8] },
-    MAppend { key: &'a [u8], flags: u32, ttl: u64, value: &'a [u8] },
-    MPrepend { key: &'a [u8], flags: u32, ttl: u64, value: &'a [u8] },
+    Get { key: &'a [u8] },
+    Set { key: &'a [u8], flags: u32, ttl: u64, value: &'a [u8] },
+    Add { key: &'a [u8], flags: u32, ttl: u64, value: &'a [u8] },
+    Append { key: &'a [u8], flags: u32, ttl: u64, value: &'a [u8] },
+    Prepend { key: &'a [u8], flags: u32, ttl: u64, value: &'a [u8] },
 }
-
-
 
 impl<'a> Command<'a> {
     pub fn handle(line: &[u8], db: &Arc<Database>) -> Response {
@@ -23,9 +21,11 @@ impl<'a> Command<'a> {
 
         let db = db.clone();
         match request {
-            Command::MGet { key } => db.get(key),
-            Command::MSet { key, flags, ttl, value } => db.insert(key, flags, ttl, value),
-            _ => Response::ServerError
+            Command::Get { key } => db.get(key),
+            Command::Set { key, flags, ttl, value } => db.insert(key, flags, ttl, value),
+            Command::Add { key, flags, ttl, value } => db.insert_new(key, flags, ttl, value),
+            Command::Append { key, flags, ttl, value } => db.append(key, flags, ttl, value),
+            Command::Prepend { key, flags, ttl, value } => db.prepend(key, flags, ttl, value),
         }
     }
 }

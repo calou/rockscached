@@ -19,7 +19,7 @@ impl Response {
             Response::Value { ref value } => Bytes::from(value.clone()),
             Response::Stored => Bytes::from("STORED\r\n"),
             Response::NotFoundError => Bytes::from("END\r\n"),
-            Response::ServerError => Bytes::from("SERVER_ERROR"),
+            Response::ServerError => Bytes::from("SERVER_ERROR\r\n"),
             _ => Bytes::from("SERVER_ERROR"),
         }
     }

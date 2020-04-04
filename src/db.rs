@@ -32,12 +32,20 @@ impl Database {
         }
     }
 
+    fn get_raw_value(&self, key: &[u8]) -> Option<Vec<u8>> {
+        let rocksdb = self.map.lock().unwrap();
+        match rocksdb.get(key) {
+            Ok(Some(value)) => Some(value[12..].to_vec()),
+            _ => None,
+        }
+    }
+
     pub fn insert(&self, key: &[u8], flags: u32, ttl: u64, value: &[u8]) -> Response {
         let mut bytes_mut = BytesMut::with_capacity(12 + value.len());
         let deadline = current_second() + ttl;
         bytes_mut.put_slice(&u64::to_be_bytes(deadline));
 
-        let mut flag_bytes= [0; 4];
+        let mut flag_bytes = [0; 4];
         BigEndian::write_u32(&mut flag_bytes, flags);
         bytes_mut.put_slice(&flag_bytes);
         bytes_mut.put_slice(value);
@@ -45,6 +53,37 @@ impl Database {
         match rocksdb.put(key, bytes_mut.bytes()) {
             Ok(()) => Response::Stored,
             _ => Response::ServerError,
+        }
+    }
+
+    pub fn insert_new(&self, key: &[u8], flags: u32, ttl: u64, value: &[u8]) -> Response {
+        match self.get_raw_value(key) {
+            Some(_) => Response::ServerError,
+            _ => self.insert(key, flags, ttl, value)
+        }
+    }
+
+    pub fn append(&self, key: &[u8], flags: u32, ttl: u64, value: &[u8]) -> Response {
+        match self.get_raw_value(key) {
+            Some(original) => {
+                let mut bytes_mut = BytesMut::with_capacity(original.len() + value.len());
+                bytes_mut.put_slice(&original);
+                bytes_mut.put_slice(value);
+                self.insert(key, flags, ttl, bytes_mut.bytes())
+            }
+            _ => Response::ServerError
+        }
+    }
+
+    pub fn prepend(&self, key: &[u8], flags: u32, ttl: u64, value: &[u8]) -> Response {
+        match self.get_raw_value(key) {
+            Some(original) => {
+                let mut bytes_mut = BytesMut::with_capacity(original.len() + value.len());
+                bytes_mut.put_slice(value);
+                bytes_mut.put_slice(&original);
+                self.insert(key, flags, ttl, bytes_mut.bytes())
+            }
+            _ => Response::ServerError
         }
     }
 }
@@ -55,7 +94,7 @@ fn format_get_response(key: &[u8], value: &[u8]) -> Response {
         Response::NotFoundError
     } else {
         let mut resp = BytesMut::new();
-        let length = value.len() as u32;
+        let length = value.len() as u32 - 12;
         let flag = BigEndian::read_u32(&value[8..12]);
 
         resp.put_slice(b"VALUE ");
