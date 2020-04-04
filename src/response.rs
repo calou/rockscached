@@ -6,6 +6,7 @@ pub enum Response {
         value: Vec<u8>,
     },
     Stored,
+    NotStored,
     NotFoundError,
     ServerError,
     Error {
@@ -20,6 +21,7 @@ impl Response {
             Response::Stored => Bytes::from("STORED\r\n"),
             Response::NotFoundError => Bytes::from("END\r\n"),
             Response::ServerError => Bytes::from("SERVER_ERROR\r\n"),
+            Response::NotStored => Bytes::from("NOT_STORED\r\n"),
             _ => Bytes::from("SERVER_ERROR"),
         }
     }

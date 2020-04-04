@@ -71,7 +71,7 @@ impl Database {
                 bytes_mut.put_slice(value);
                 self.insert(key, flags, ttl, bytes_mut.bytes())
             }
-            _ => Response::ServerError
+            _ => Response::NotStored
         }
     }
 
@@ -83,7 +83,7 @@ impl Database {
                 bytes_mut.put_slice(&original);
                 self.insert(key, flags, ttl, bytes_mut.bytes())
             }
-            _ => Response::ServerError
+            _ => Response::NotStored
         }
     }
 }
