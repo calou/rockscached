@@ -4,6 +4,7 @@ use crate::response::Response;
 use bytes::{BytesMut, BufMut, Buf};
 use std::time::SystemTime;
 use crate::byte_utils::{bytes_to_u64, u64_to_bytes};
+use byteorder::{ByteOrder, LittleEndian, BigEndian};
 
 const EXPIRATION_PREFIX: &[u8] = b"**e**";
 
@@ -27,7 +28,7 @@ impl Database {
         let rocksdb = self.map.lock().unwrap();
         match rocksdb.get(get_prefixed_key(EXPIRATION_PREFIX, key.clone())) {
             Ok(Some(exp)) => {
-                let expiration = bytes_to_u64(&exp);
+                let expiration = BigEndian::read_u64(&exp);
                 if expiration < current_second() {
                     Response::NotFoundError
                 } else {
@@ -52,7 +53,7 @@ impl Database {
         let deadline = current_second() + ttl;
 
         let rocksdb = self.map.lock().unwrap();
-        match rocksdb.put(exp_key, u64_to_bytes(deadline)) {
+        match rocksdb.put(exp_key, u64::to_be_bytes(deadline)) {
             Ok(()) => (),
             _ => return Response::ServerError,
         }
