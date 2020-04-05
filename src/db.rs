@@ -1,9 +1,10 @@
 use std::sync::{Mutex, Arc};
-use rocksdb::{DB, Options, DBCompressionType};
+use rocksdb::{DB, Options, DBCompressionType, Error};
 use crate::response::Response;
 use bytes::{BytesMut, BufMut, Buf};
 use std::time::SystemTime;
 use byteorder::{ByteOrder, BigEndian};
+use crate::byte_utils::{convert_bytes_to_u64, u64_to_bytes};
 
 pub struct Database {
     pub map: Mutex<DB>,
@@ -27,7 +28,7 @@ impl Database {
             Ok(Some(value)) => format_get_response(key, &value),
             Ok(None) => Response::NotFoundError,
             Err(e) => Response::Error {
-                msg: format!("Error {}", e),
+                msg: Box::new(format!("Error {}", e)),
             },
         }
     }
@@ -53,30 +54,55 @@ impl Database {
         self.insert_with_deadline(key, flags, deadline, value)
     }
 
-    fn insert_with_deadline(&self, key: &[u8], flags: u32, deadline: u64, value: &[u8]) -> Response {
-        let mut bytes_mut = BytesMut::with_capacity(12 + value.len());
-        bytes_mut.put_slice(&u64::to_be_bytes(deadline));
-
-        let mut flag_bytes = [0; 4];
-        BigEndian::write_u32(&mut flag_bytes, flags);
-        bytes_mut.put_slice(&flag_bytes);
-        bytes_mut.put_slice(value);
-        let rocksdb = self.map.lock().unwrap();
-        match rocksdb.put(key, bytes_mut.bytes()) {
-            Ok(()) => Response::Stored,
-            _ => Response::ServerError,
-        }
-    }
-
     pub fn insert_if_not_present(&self, key: &[u8], flags: u32, ttl: u64, value: &[u8]) -> Response {
         match self.get_raw_value(key) {
             Some(_) => Response::ServerError,
             _ => self.insert(key, flags, ttl, value)
         }
     }
-    
-    fn update_combined<'a, I>(&self, key: &[u8], flags: u32, ttl: u64, value: &'a[u8], f: I) -> Response
-        where I: Fn(Vec<u8>, &'a[u8]) -> Vec<u8>
+
+    pub fn append(&self, key: &[u8], flags: u32, ttl: u64, value: &[u8]) -> Response {
+        let f = |original: Vec<u8>, appendage: &[u8]| -> Vec<u8> {
+            let mut bytes_mut = BytesMut::with_capacity(original.len() + appendage.len());
+            bytes_mut.put_slice(&original);
+            bytes_mut.put_slice(appendage);
+            bytes_mut.bytes().to_vec()
+        };
+        self.update_combined(key, flags, ttl, value, f)
+    }
+
+    pub fn prepend(&self, key: &[u8], flags: u32, ttl: u64, value: &[u8]) -> Response {
+        let f = |original: Vec<u8>, appendage: &[u8]| -> Vec<u8> {
+            let mut bytes_mut = BytesMut::with_capacity(original.len() + appendage.len());
+            bytes_mut.put_slice(appendage);
+            bytes_mut.put_slice(&original);
+            bytes_mut.bytes().to_vec()
+        };
+        self.update_combined(key, flags, ttl, value, f)
+    }
+
+    fn insert_with_deadline(&self, key: &[u8], flags: u32, deadline: u64, value: &[u8]) -> Response {
+        let deadline_bytes = &u64::to_be_bytes(deadline);
+        let mut flag_bytes = [0; 4];
+        BigEndian::write_u32(&mut flag_bytes, flags);
+        self.insert_raw(key, deadline_bytes, &mut flag_bytes, value)
+    }
+
+    fn insert_raw(&self, key: &[u8], deadline_bytes: &[u8], flag_bytes: &[u8], value: &[u8]) -> Response {
+        let mut bytes_mut = BytesMut::with_capacity(12 + value.len());
+        bytes_mut.put_slice(deadline_bytes);
+        bytes_mut.put_slice(&flag_bytes);
+        bytes_mut.put_slice(value);
+        let rocksdb = self.map.lock().unwrap();
+        match rocksdb.put(key, bytes_mut.bytes()) {
+            Ok(_) => Response::Stored,
+            _ => Response::ServerError
+
+        }
+    }
+
+    fn update_combined<'a, I>(&self, key: &[u8], flags: u32, ttl: u64, value: &'a [u8], f: I) -> Response
+        where I: Fn(Vec<u8>, &'a [u8]) -> Vec<u8>
     {
         match self.get_raw_value(key) {
             Some(original) => {
@@ -86,24 +112,55 @@ impl Database {
         }
     }
 
-    pub fn append(&self, key: &[u8], flags: u32, ttl: u64, value: &[u8]) -> Response {
-        let f = |original: Vec<u8>, appenditure: &[u8]| -> Vec<u8> {
-            let mut bytes_mut = BytesMut::with_capacity(original.len() + appenditure.len());
-            bytes_mut.put_slice(&original);
-            bytes_mut.put_slice(appenditure);
-            bytes_mut.bytes().to_vec()
-        };
-        self.update_combined(key, flags, ttl, value, f)
+    pub fn increment(&self, key: &[u8], increment: u64) -> Response {
+        println!("Increment {:?} by {}", key, increment);
+        self.update_number(key, increment, |a, b| { a + b })
     }
 
-    pub fn prepend(&self, key: &[u8], flags: u32, ttl: u64, value: &[u8]) -> Response {
-        let f = |original: Vec<u8>, appenditure: &[u8]| -> Vec<u8> {
-            let mut bytes_mut = BytesMut::with_capacity(original.len() + appenditure.len());
-            bytes_mut.put_slice(appenditure);
-            bytes_mut.put_slice(&original);
-            bytes_mut.bytes().to_vec()
-        };
-        self.update_combined(key, flags, ttl, value, f)
+    pub fn decrement(&self, key: &[u8], increment: u64) -> Response {
+        self.update_number(key, increment, |a, b| { a - b })
+    }
+
+    fn update_number<'a, I>(&self, key: &[u8], increment: u64, f: I) -> Response
+        where I: Fn(u64, u64) -> u64
+    {
+        match self.get_record(key) {
+            Ok(Some(value)) => {
+                let expiration = BigEndian::read_u64(&value[0..8]);
+
+                if expiration < current_second() {
+                    Response::NotFoundError
+                } else {
+                    match convert_bytes_to_u64(&value[12..]) {
+                        Ok(stored_value) => {
+                            let updated_value = f(stored_value, increment);
+                            let new_value_bytes = u64_to_bytes(updated_value);
+                            match self.insert_raw(key, &value[0..8], &value[8..12], &new_value_bytes) {
+                                Response::Stored => {
+                                    let mut bytes_mut = BytesMut::with_capacity(new_value_bytes.len() + 2);
+                                    bytes_mut.put_slice(&new_value_bytes);
+                                    bytes_mut.put_slice(b"\r\n");
+                                    Response::Value { value: bytes_mut.to_vec() }
+                                }
+                                _ => Response::ServerError
+                            }
+                        }
+                        Err(e) => {
+                            println!("An error occured {}", e);
+                            Response::Error {
+                                msg: Box::new(String::from("CLIENT_ERROR cannot increment or decrement non-numeric value\r\n"))
+                            }
+                        }
+                    }
+                }
+            }
+            _ => Response::NotStored
+        }
+    }
+
+    fn get_record(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Error> {
+        let rocksdb = self.map.lock().unwrap();
+        rocksdb.get(key)
     }
 }
 

@@ -10,7 +10,7 @@ pub enum Response {
     NotFoundError,
     ServerError,
     Error {
-        msg: String,
+        msg: Box<String>,
     },
 }
 
@@ -22,7 +22,7 @@ impl Response {
             Response::NotFoundError => Bytes::from("END\r\n"),
             Response::ServerError => Bytes::from("SERVER_ERROR\r\n"),
             Response::NotStored => Bytes::from("NOT_STORED\r\n"),
-            _ => Bytes::from("SERVER_ERROR"),
+            _ => Bytes::from("ERROR\r\n"),
         }
     }
 }

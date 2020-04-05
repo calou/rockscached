@@ -19,7 +19,7 @@ impl<'a> Command<'a> {
     pub fn handle(line: &[u8], db: &Arc<Database>) -> Response {
         let request = match parse(line) {
             Ok(req) => req,
-            Err(e) => return Response::Error { msg: e },
+            Err(e) => return Response::Error { msg: Box::new(e) },
         };
 
         let db = db.clone();
@@ -30,7 +30,8 @@ impl<'a> Command<'a> {
             Command::Add { key, flags, ttl, value } => db.insert_if_not_present(key, flags, ttl, value),
             Command::Append { key, flags, ttl, value } => db.append(key, flags, ttl, value),
             Command::Prepend { key, flags, ttl, value } => db.prepend(key, flags, ttl, value),
-            _ => Response::ServerError
+            Command::Increment { key, value } => db.increment(key, value),
+            Command::Decrement { key, value } => db.decrement(key, value),
         }
     }
 }
