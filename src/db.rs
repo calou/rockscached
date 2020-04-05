@@ -22,15 +22,17 @@ impl Database {
         })
     }
 
-    pub fn get(&self, key: &[u8]) -> Response {
+    pub fn get(&self, keys: Vec<&[u8]>) -> Response {
+        let mut bytes_mut = BytesMut::new();
         let rocksdb = self.map.lock().unwrap();
-        match rocksdb.get(key) {
-            Ok(Some(value)) => format_get_response(key, &value),
-            Ok(None) => Response::NotFoundError,
-            Err(e) => Response::Error {
-                msg: Box::new(format!("Error {}", e)),
-            },
+
+        for key in keys {
+            match rocksdb.get(key) {
+                Ok(Some(value)) => append_get_response(key, &value, &mut bytes_mut),
+                _ => ()
+            };
         }
+        finish_get_response(&mut bytes_mut)
     }
 
     pub fn delete(&self, key: &[u8]) -> Response {
@@ -164,31 +166,32 @@ impl Database {
     }
 }
 
-fn format_get_response(key: &[u8], value: &[u8]) -> Response {
+fn append_get_response(key: &[u8], value: &[u8], bytes_mut: &mut BytesMut) {
     let expiration = BigEndian::read_u64(&value[0..8]);
-    if expiration < current_second() {
-        Response::NotFoundError
-    } else {
-        format_raw_get_response(key, &value[12..], &value[8..12])
+    if expiration > current_second() {
+        append_raw_get_response(key, &value[8..12], &value[12..], bytes_mut);
     }
 }
 
-fn format_raw_get_response(key: &[u8], data_bytes: &[u8], flag_bytes: &[u8]) -> Response {
-    let mut resp = BytesMut::new();
+fn finish_get_response(bytes_mut: &mut BytesMut) -> Response {
+    bytes_mut.put_slice(b"END\r\n");
+    Response::Value {
+        value: bytes_mut.bytes().to_vec(),
+    }
+}
+
+fn append_raw_get_response(key: &[u8], flag_bytes: &[u8], data_bytes: &[u8], bytes_mut: &mut BytesMut) {
     let flag = BigEndian::read_u32(flag_bytes);
     let length = data_bytes.len() as u32;
-    resp.put_slice(b"VALUE ");
-    resp.put_slice(key);
-    resp.put_slice(b" ");
-    resp.put_slice(&flag.to_string().into_bytes());
-    resp.put_slice(b" ");
-    resp.put_slice(&length.to_string().into_bytes());
-    resp.put_slice(b"\r\n");
-    resp.put_slice(data_bytes);
-    resp.put_slice(b"\r\nEND\r\n");
-    Response::Value {
-        value: resp.bytes().to_vec(),
-    }
+    bytes_mut.put_slice(b"VALUE ");
+    bytes_mut.put_slice(key);
+    bytes_mut.put_slice(b" ");
+    bytes_mut.put_slice(&flag.to_string().into_bytes());
+    bytes_mut.put_slice(b" ");
+    bytes_mut.put_slice(&length.to_string().into_bytes());
+    bytes_mut.put_slice(b"\r\n");
+    bytes_mut.put_slice(data_bytes);
+    bytes_mut.put_slice(b"\r\n");
 }
 
 fn current_second() -> u64 {

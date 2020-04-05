@@ -9,6 +9,7 @@ use nom::{
     character::complete::{crlf, space1, digit1},
 };
 use crate::byte_utils::{bytes_to_u64, bytes_to_u32};
+use nom::multi::many1;
 
 #[derive(PartialEq, Debug)]
 struct RawCommand<'a> {
@@ -50,14 +51,33 @@ fn parse_incr<'a>(input: &'a [u8]) -> IResult<&'a [u8], RawCommand<'_>> {
     }
 }
 
-fn _parse_get<'a>(input: &'a [u8]) -> IResult<&'a [u8], (&[u8], &[u8])> {
-    let alt_tags = alt((tag("get"), tag("delete")));
-    let (input, (v, _, k, _)) = tuple((alt_tags, space1, not_space, crlf))(input)?;
+fn _parse_delete<'a>(input: &'a [u8]) -> IResult<&'a [u8], (&[u8], &[u8])> {
+    let (input, (v, _, k, _)) = tuple((tag("delete"), space1, not_space, crlf))(input)?;
+    Ok((input, (v, k)))
+}
+
+fn space_and_key<'a>(input: &'a [u8]) -> IResult<&'a [u8], &[u8]> {
+    let (input, (_, k)) = tuple((space1, not_space))(input)?;
+    Ok((input, k))
+}
+
+fn _parse_get<'a>(input: &'a [u8]) -> IResult<&'a [u8], (&[u8], Vec<&[u8]>)> {
+    let alt_tags = alt((tag("get"), tag("gets")));
+    let (input, (v, k, _)) = tuple((alt_tags, many1(space_and_key), crlf))(input)?;
     Ok((input, (v, k)))
 }
 
 fn parse_get<'a>(input: &'a [u8]) -> IResult<&'a [u8], RawCommand<'_>> {
     match _parse_get(input) {
+        Ok((input, (v, keys))) => {
+            Ok((input, RawCommand { verb: String::from_utf8(v.to_vec()).unwrap(), args: keys }))
+        }
+        Err(e) => Result::Err(e)
+    }
+}
+
+fn parse_delete<'a>(input: &'a [u8]) -> IResult<&'a [u8], RawCommand<'_>> {
+    match _parse_delete(input) {
         Ok((input, (v, key))) => {
             Ok((input, RawCommand { verb: String::from_utf8(v.to_vec()).unwrap(), args: vec![key] }))
         }
@@ -66,7 +86,7 @@ fn parse_get<'a>(input: &'a [u8]) -> IResult<&'a [u8], RawCommand<'_>> {
 }
 
 fn parse_raw_command<'a>(input: &'a [u8]) -> IResult<&'a [u8], RawCommand<'_>> {
-    let (input, cmd) = alt((parse_get, parse_set, parse_incr))(input)?;
+    let (input, cmd) = alt((parse_get, parse_delete, parse_set, parse_incr))(input)?;
     Ok((input, cmd))
 }
 
@@ -74,7 +94,7 @@ pub fn parse(input: &[u8]) -> Result<Command<'_>, String> {
     match parse_raw_command(input) {
         Ok((_input, cmd)) => {
             match cmd.verb.as_str() {
-                "get" => Ok(Command::Get { key: cmd.args[0] }),
+                "get" => Ok(Command::Get { keys: cmd.args }),
                 "delete" => Ok(Command::Delete { key: cmd.args[0] }),
                 "set" => Ok(Command::Set { key: cmd.args[0], flags: bytes_to_u32(cmd.args[1]), ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3] }),
                 "add" => Ok(Command::Add { key: cmd.args[0], flags: bytes_to_u32(cmd.args[1]), ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3] }),
@@ -102,7 +122,13 @@ mod tests {
     #[test]
     fn parse_for_get() {
         let result = parse(b"get myKey\r\n");
-        assert_eq!(result.unwrap(), Command::Get { key: b"myKey" });
+        assert_eq!(result.unwrap(), Command::Get { keys: vec![b"myKey"] });
+    }
+
+    #[test]
+    fn parse_for_multiget() {
+        let result = parse(b"get k1 k2 k3 k4\r\n");
+        assert_eq!(result.unwrap(), Command::Get { keys: vec![b"k1", b"k2", b"k3", b"k4"] });
     }
 
     #[test]

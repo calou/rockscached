@@ -5,7 +5,7 @@ use crate::parser::parse;
 
 #[derive(PartialEq, Debug)]
 pub enum Command<'a> {
-    Get { key: &'a [u8] },
+    Get { keys: Vec<&'a [u8]> },
     Delete { key: &'a [u8] },
     Set { key: &'a [u8], flags: u32, ttl: u64, value: &'a [u8] },
     Add { key: &'a [u8], flags: u32, ttl: u64, value: &'a [u8] },
@@ -13,6 +13,7 @@ pub enum Command<'a> {
     Prepend { key: &'a [u8], flags: u32, ttl: u64, value: &'a [u8] },
     Increment { key: &'a [u8], value: u64 },
     Decrement { key: &'a [u8], value: u64 },
+    Stats,
 }
 
 impl<'a> Command<'a> {
@@ -24,7 +25,7 @@ impl<'a> Command<'a> {
 
         let db = db.clone();
         match request {
-            Command::Get { key } => db.get(key),
+            Command::Get { keys } => db.get(keys),
             Command::Delete { key } => db.delete(key),
             Command::Set { key, flags, ttl, value } => db.insert(key, flags, ttl, value),
             Command::Add { key, flags, ttl, value } => db.insert_if_not_present(key, flags, ttl, value),
@@ -32,6 +33,7 @@ impl<'a> Command<'a> {
             Command::Prepend { key, flags, ttl, value } => db.prepend(key, flags, ttl, value),
             Command::Increment { key, value } => db.increment(key, value),
             Command::Decrement { key, value } => db.decrement(key, value),
+            _ => Response::NotImplemented
         }
     }
 }
