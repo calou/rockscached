@@ -105,7 +105,10 @@ pub fn parse(input: &[u8]) -> Result<Command<'_>, String> {
                 _ => Err(String::from("Invalid command"))
             }
         }
-        _ => Err(String::from("Unable to parse command"))
+        _ => {
+            println!("{}", String::from_utf8_lossy(input));
+            Err(String::from("Unable to parse command"))
+        }
     }
 }
 
@@ -141,6 +144,13 @@ mod tests {
     fn parse_for_set() {
         let result = parse(b"set myKey 0 60 19\r\nthe value to store\r\n");
         assert_eq!(result.unwrap(), Command::Set { key: b"myKey", flags: 0, ttl: 60u64, value: b"the value to store" });
+    }
+
+
+    #[test]
+    fn parse_for_set2() {
+        let result = parse(b"set k336 0 1000 4\r\nv336\r\n");
+        assert_eq!(result.unwrap(), Command::Set { key: b"k336", flags: 0, ttl: 1000u64, value: b"v336" });
     }
 
     #[test]

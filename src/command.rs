@@ -17,7 +17,7 @@ pub enum Command<'a> {
 }
 
 impl<'a> Command<'a> {
-    pub fn handle(line: &[u8], db: &Arc<Database>) -> Response {
+    pub fn handle(line: &'a[u8], db: &'a Arc<Database>) -> Response {
         let request = match parse(line) {
             Ok(req) => req,
             Err(e) => return Response::Error { msg: Box::new(e) },
