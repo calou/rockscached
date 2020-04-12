@@ -1,7 +1,4 @@
 #![warn(rust_2018_idioms)]
-
-extern crate tokio;
-extern crate tokio_util;
 mod command;
 mod db;
 mod response;
@@ -9,10 +6,7 @@ mod parser;
 mod byte_utils;
 
 use tokio::net::TcpListener;
-use tokio::stream::StreamExt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio_util::codec::{Framed, BytesCodec};
-use futures::SinkExt;
 
 use std::env;
 use std::error::Error;
@@ -47,20 +41,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         while let Ok(n) = socket.read(&mut buf).await {
                             match n {
                                 0 => {
-                                    println!("Socket closed");
-                                    return
-                                },
-                                1024=> {
-                                    println!("Received {} bytes", n);
+                                    return;
+                                }
+                                1024 => {
                                     bytes_mut.put_slice(&buf);
-                                },
+                                }
                                 n => {
-                                    println!("Received {} bytes", n);
                                     bytes_mut.put_slice(&buf[0..n]);
-                                    let response = Command::handle(bytes_mut.bytes(), &db);
-                                    let response_bytes = response.serialize();
-                                    if let Err(e) = socket.write_all(response_bytes.bytes()).await {
-                                        println!("error on sending response; error = {:?}", e);
+                                    if n < 1024 || (buf[1022] == b'\r' && buf[1023] == b'\n') {
+                                        let response = Command::handle(bytes_mut.bytes(), &db);
+                                        let response_bytes = response.serialize();
+                                        if let Err(e) = socket.write_all(response_bytes.bytes()).await {
+                                            println!("error on sending response; error = {:?}", e);
+                                        }
                                     }
                                 }
                             }
