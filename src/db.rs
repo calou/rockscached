@@ -6,8 +6,14 @@ use std::time::SystemTime;
 use byteorder::{ByteOrder, BigEndian};
 use crate::byte_utils::{convert_bytes_to_u64, u64_to_bytes};
 
+#[derive(Debug)]
+struct DatabaseHolder {
+    rocksdb: DB,
+    count: u64,
+}
+
 pub struct Database {
-    pub map: Mutex<DB>,
+    mutex: Mutex<DatabaseHolder>,
 }
 
 impl Database {
@@ -17,15 +23,16 @@ impl Database {
         db_opts.set_max_write_buffer_number(16);
         db_opts.create_if_missing(true);
         let initial_db = DB::open(&db_opts, path).unwrap();
+        let dh = DatabaseHolder {rocksdb: initial_db, count: 0};
         Arc::new(Database {
-            map: Mutex::new(initial_db),
+            mutex: Mutex::new(dh),
         })
     }
 
     pub fn get(&self, keys: Vec<&[u8]>) -> Response {
         let mut bytes_mut = BytesMut::new();
-        let rocksdb = self.map.lock().unwrap();
-
+        let dh = self.mutex.lock().unwrap();
+        let rocksdb = &dh.rocksdb;
         for key in keys {
             match rocksdb.get(key) {
                 Ok(Some(value)) => append_get_response(key, &value, &mut bytes_mut),
@@ -36,7 +43,8 @@ impl Database {
     }
 
     pub fn delete(&self, key: &[u8]) -> Response {
-        let rocksdb = self.map.lock().unwrap();
+        let dh = self.mutex.lock().unwrap();
+        let rocksdb = &dh.rocksdb;
         match rocksdb.delete(key) {
             Ok(()) => Response::Stored,
             Err(_) => Response::NotFoundError
@@ -44,7 +52,8 @@ impl Database {
     }
 
     fn get_raw_value(&self, key: &[u8]) -> Option<Vec<u8>> {
-        let rocksdb = self.map.lock().unwrap();
+        let dh = self.mutex.lock().unwrap();
+        let rocksdb = &dh.rocksdb;
         match rocksdb.get(key) {
             Ok(Some(value)) => Some(value[12..].to_vec()),
             _ => None,
@@ -95,7 +104,8 @@ impl Database {
         bytes_mut.put_slice(deadline_bytes);
         bytes_mut.put_slice(&flag_bytes);
         bytes_mut.put_slice(value);
-        let rocksdb = self.map.lock().unwrap();
+        let dh = self.mutex.lock().unwrap();
+        let rocksdb = &dh.rocksdb;
         match rocksdb.put(key, bytes_mut.bytes()) {
             Ok(_) => Response::Stored,
             _ => Response::ServerError
@@ -115,7 +125,6 @@ impl Database {
     }
 
     pub fn increment(&self, key: &[u8], increment: u64) -> Response {
-        println!("Increment {:?} by {}", key, increment);
         self.update_number(key, increment, |a, b| { a + b })
     }
 
@@ -161,15 +170,9 @@ impl Database {
     }
 
     fn get_record(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Error> {
-        let rocksdb = self.map.lock().unwrap();
+        let dh = self.mutex.lock().unwrap();
+        let rocksdb = &dh.rocksdb;
         rocksdb.get(key)
-    }
-}
-
-fn append_get_response(key: &[u8], value: &[u8], bytes_mut: &mut BytesMut) {
-    let expiration = BigEndian::read_u64(&value[0..8]);
-    if expiration > current_second() {
-        append_raw_get_response(key, &value[8..12], &value[12..], bytes_mut);
     }
 }
 
@@ -177,6 +180,13 @@ fn finish_get_response(bytes_mut: &mut BytesMut) -> Response {
     bytes_mut.put_slice(b"END\r\n");
     Response::Value {
         value: bytes_mut.bytes().to_vec(),
+    }
+}
+
+fn append_get_response(key: &[u8], value: &[u8], bytes_mut: &mut BytesMut) {
+    let expiration = BigEndian::read_u64(&value[0..8]);
+    if expiration > current_second() {
+        append_raw_get_response(key, &value[8..12], &value[12..], bytes_mut);
     }
 }
 
