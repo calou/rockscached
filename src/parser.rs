@@ -62,7 +62,7 @@ fn space_and_key<'a>(input: &'a [u8]) -> IResult<&'a [u8], &[u8]> {
 }
 
 fn _parse_get<'a>(input: &'a [u8]) -> IResult<&'a [u8], (&[u8], Vec<&[u8]>)> {
-    let alt_tags = alt((tag("get"), tag("gets")));
+    let alt_tags = alt((tag("gets"), tag("get")));
     let (input, (v, k, _)) = tuple((alt_tags, many1(space_and_key), crlf))(input)?;
     Ok((input, (v, k)))
 }
@@ -95,6 +95,7 @@ pub fn parse(input: &[u8]) -> Result<Command<'_>, String> {
         Ok((_input, cmd)) => {
             match cmd.verb.as_str() {
                 "get" => Ok(Command::Get { keys: cmd.args }),
+                "gets" => Ok(Command::Gets { keys: cmd.args }),
                 "delete" => Ok(Command::Delete { key: cmd.args[0] }),
                 "set" => Ok(Command::Set { key: cmd.args[0], flags: bytes_to_u32(cmd.args[1]), ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3] }),
                 "add" => Ok(Command::Add { key: cmd.args[0], flags: bytes_to_u32(cmd.args[1]), ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3] }),
@@ -132,6 +133,12 @@ mod tests {
     fn parse_for_multiget() {
         let result = parse(b"get k1 k2 k3 k4\r\n");
         assert_eq!(result.unwrap(), Command::Get { keys: vec![b"k1", b"k2", b"k3", b"k4"] });
+    }
+
+    #[test]
+    fn parse_for_multigets() {
+        let result = parse(b"gets k1 k2 k3 k4\r\n");
+        assert_eq!(result.unwrap(), Command::Gets { keys: vec![b"k1", b"k2", b"k3", b"k4"] });
     }
 
     #[test]

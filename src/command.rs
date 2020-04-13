@@ -6,6 +6,7 @@ use crate::parser::parse;
 #[derive(PartialEq, Debug)]
 pub enum Command<'a> {
     Get { keys: Vec<&'a [u8]> },
+    Gets { keys: Vec<&'a [u8]> },
     Delete { key: &'a [u8] },
     Set { key: &'a [u8], flags: u32, ttl: u64, value: &'a [u8] },
     Add { key: &'a [u8], flags: u32, ttl: u64, value: &'a [u8] },
@@ -25,7 +26,8 @@ impl<'a> Command<'a> {
 
         let db = db.clone();
         match request {
-            Command::Get { keys } => db.get(keys),
+            Command::Get { keys } => db.get(keys, false),
+            Command::Gets { keys } => db.get(keys, true),
             Command::Delete { key } => db.delete(key),
             Command::Set { key, flags, ttl, value } => db.insert(key, flags, ttl, value),
             Command::Add { key, flags, ttl, value } => db.insert_if_not_present(key, flags, ttl, value),

@@ -36,13 +36,13 @@ impl Database {
         })
     }
 
-    pub fn get(&self, keys: Vec<&[u8]>) -> Response {
+    pub fn get(&self, keys: Vec<&[u8]>, include_cas: bool) -> Response {
         let mut bytes_mut = BytesMut::new();
         let dh = self.mutex.lock().unwrap();
         let rocksdb = &dh.rocksdb;
         for key in keys {
             match rocksdb.get(key) {
-                Ok(Some(value)) => append_get_response(key, &value, &mut bytes_mut),
+                Ok(Some(value)) => append_get_response(key, &value, &mut bytes_mut,include_cas),
                 _ => ()
             };
         }
@@ -152,7 +152,7 @@ impl Database {
                 if expiration < current_second() {
                     Response::NotFoundError
                 } else {
-                    match convert_bytes_to_u64(&value[18..]) {
+                    match convert_bytes_to_u64(&value[20..]) {
                         Ok(stored_value) => {
                             let updated_value = f(stored_value, increment);
                             let new_value_bytes = u64_to_bytes(updated_value);
@@ -193,14 +193,18 @@ fn finish_get_response(bytes_mut: &mut BytesMut) -> Response {
     }
 }
 
-fn append_get_response(key: &[u8], value: &[u8], bytes_mut: &mut BytesMut) {
+fn append_get_response(key: &[u8], value: &[u8], bytes_mut: &mut BytesMut, include_cas:bool) {
     let expiration = BigEndian::read_u64(&value[0..8]);
     if expiration > current_second() {
-        append_raw_get_response(key, &value[16..20], &value[20..], bytes_mut);
+        let cas = match include_cas {
+            true => Some(BigEndian::read_u64(&value[8..16])),
+            _ => None
+        };
+        append_raw_get_response(key, cas, &value[16..20], &value[20..], bytes_mut);
     }
 }
 
-fn append_raw_get_response(key: &[u8], flag_bytes: &[u8], data_bytes: &[u8], bytes_mut: &mut BytesMut) {
+fn append_raw_get_response(key: &[u8], cas: Option<u64>, flag_bytes: &[u8], data_bytes: &[u8], bytes_mut: &mut BytesMut) {
     let flag = BigEndian::read_u32(flag_bytes);
     let length = data_bytes.len() as u32;
     bytes_mut.put_slice(b"VALUE ");
@@ -209,6 +213,13 @@ fn append_raw_get_response(key: &[u8], flag_bytes: &[u8], data_bytes: &[u8], byt
     bytes_mut.put_slice(&flag.to_string().into_bytes());
     bytes_mut.put_slice(b" ");
     bytes_mut.put_slice(&length.to_string().into_bytes());
+    match cas {
+        Some(n) => {
+            bytes_mut.put_slice(b" ");
+            bytes_mut.put_slice(&n.to_string().into_bytes());
+        }
+        _ => ()
+    }
     bytes_mut.put_slice(b"\r\n");
     bytes_mut.put_slice(data_bytes);
     bytes_mut.put_slice(b"\r\n");
