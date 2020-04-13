@@ -9,7 +9,14 @@ use crate::byte_utils::{convert_bytes_to_u64, u64_to_bytes};
 #[derive(Debug)]
 struct DatabaseHolder {
     rocksdb: DB,
-    count: u64,
+    cas: u64,
+}
+
+impl DatabaseHolder {
+    fn increment_cas(& mut self) -> u64 {
+        self.cas +=1;
+        self.cas
+    }
 }
 
 pub struct Database {
@@ -23,7 +30,7 @@ impl Database {
         db_opts.set_max_write_buffer_number(16);
         db_opts.create_if_missing(true);
         let initial_db = DB::open(&db_opts, path).unwrap();
-        let dh = DatabaseHolder {rocksdb: initial_db, count: 0};
+        let dh = DatabaseHolder {rocksdb: initial_db, cas: 0};
         Arc::new(Database {
             mutex: Mutex::new(dh),
         })
@@ -55,7 +62,7 @@ impl Database {
         let dh = self.mutex.lock().unwrap();
         let rocksdb = &dh.rocksdb;
         match rocksdb.get(key) {
-            Ok(Some(value)) => Some(value[12..].to_vec()),
+            Ok(Some(value)) => Some(value[18..].to_vec()),
             _ => None,
         }
     }
@@ -100,12 +107,15 @@ impl Database {
     }
 
     fn insert_raw(&self, key: &[u8], deadline_bytes: &[u8], flag_bytes: &[u8], value: &[u8]) -> Response {
-        let mut bytes_mut = BytesMut::with_capacity(12 + value.len());
+        let mut dh = self.mutex.lock().unwrap();
+        let cas  = dh.increment_cas();
+        let mut bytes_mut = BytesMut::with_capacity(18 + value.len());
         bytes_mut.put_slice(deadline_bytes);
+        bytes_mut.put_u64(cas);
         bytes_mut.put_slice(&flag_bytes);
         bytes_mut.put_slice(value);
-        let dh = self.mutex.lock().unwrap();
         let rocksdb = &dh.rocksdb;
+
         match rocksdb.put(key, bytes_mut.bytes()) {
             Ok(_) => Response::Stored,
             _ => Response::ServerError
@@ -142,11 +152,11 @@ impl Database {
                 if expiration < current_second() {
                     Response::NotFoundError
                 } else {
-                    match convert_bytes_to_u64(&value[12..]) {
+                    match convert_bytes_to_u64(&value[18..]) {
                         Ok(stored_value) => {
                             let updated_value = f(stored_value, increment);
                             let new_value_bytes = u64_to_bytes(updated_value);
-                            match self.insert_raw(key, &value[0..8], &value[8..12], &new_value_bytes) {
+                            match self.insert_raw(key, &value[0..8], &value[16..20], &new_value_bytes) {
                                 Response::Stored => {
                                     let mut bytes_mut = BytesMut::with_capacity(new_value_bytes.len() + 2);
                                     bytes_mut.put_slice(&new_value_bytes);
@@ -186,7 +196,7 @@ fn finish_get_response(bytes_mut: &mut BytesMut) -> Response {
 fn append_get_response(key: &[u8], value: &[u8], bytes_mut: &mut BytesMut) {
     let expiration = BigEndian::read_u64(&value[0..8]);
     if expiration > current_second() {
-        append_raw_get_response(key, &value[8..12], &value[12..], bytes_mut);
+        append_raw_get_response(key, &value[16..20], &value[20..], bytes_mut);
     }
 }
 
