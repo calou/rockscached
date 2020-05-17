@@ -56,6 +56,11 @@ fn _parse_delete<'a>(input: &'a [u8]) -> IResult<&'a [u8], (&[u8], &[u8])> {
     Ok((input, (v, k)))
 }
 
+fn parse_stats<'a>(input: &'a [u8]) -> IResult<&'a [u8], RawCommand<'_>> {
+    let (input, (v, _)) = tuple((tag("stats"), crlf))(input)?;
+    Ok((input, RawCommand { verb: String::from_utf8(v.to_vec()).unwrap(), args: vec![] }))
+}
+
 fn space_and_key<'a>(input: &'a [u8]) -> IResult<&'a [u8], &[u8]> {
     let (input, (_, k)) = tuple((space1, not_space))(input)?;
     Ok((input, k))
@@ -86,7 +91,7 @@ fn parse_delete<'a>(input: &'a [u8]) -> IResult<&'a [u8], RawCommand<'_>> {
 }
 
 fn parse_raw_command<'a>(input: &'a [u8]) -> IResult<&'a [u8], RawCommand<'_>> {
-    let (input, cmd) = alt((parse_get, parse_delete, parse_set, parse_incr))(input)?;
+    let (input, cmd) = alt((parse_get, parse_delete, parse_set, parse_incr, parse_stats))(input)?;
     Ok((input, cmd))
 }
 
@@ -103,6 +108,7 @@ pub fn parse(input: &[u8]) -> Result<Command<'_>, String> {
                 "prepend" => Ok(Command::Prepend { key: cmd.args[0], flags: bytes_to_u32(cmd.args[1]), ttl: bytes_to_u64(cmd.args[2]), value: cmd.args[3] }),
                 "incr" => Ok(Command::Increment { key: cmd.args[0], value: bytes_to_u64(cmd.args[1]) }),
                 "decr" => Ok(Command::Decrement { key: cmd.args[0], value: bytes_to_u64(cmd.args[1]) }),
+                "stats" => Ok(Command::Stats),
                 _ => Err(String::from("Invalid command"))
             }
         }
@@ -145,6 +151,12 @@ mod tests {
     fn parse_for_delete() {
         let result = parse(b"delete myKey\r\n");
         assert_eq!(result.unwrap(), Command::Delete { key: b"myKey" });
+    }
+
+    #[test]
+    fn parse_for_stats() {
+        let result = parse(b"stats\r\n");
+        assert_eq!(result.unwrap(), Command::Stats);
     }
 
     #[test]
