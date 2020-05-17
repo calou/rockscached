@@ -20,3 +20,24 @@ pub fn bytes_to_u32(bytes: &[u8]) -> u32 {
 pub fn u64_to_bytes<'a>(u: u64) -> Vec<u8> {
     u.to_string().into_bytes()
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bytes_to_u64_nominal() {
+        assert_eq!(bytes_to_u64(b"12345"), 12345u64);
+    }
+
+    #[test]
+    fn bytes_to_u32_nominal() {
+        assert_eq!(bytes_to_u32(b"12345"), 12345u32);
+    }
+
+    #[test]
+    fn u64_to_bytes_nominal() {
+        assert_eq!(u64_to_bytes(12345u64), b"12345");
+    }
+}

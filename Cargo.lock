@@ -363,9 +363,9 @@ dependencies = [
 
 [[package]]
 name = "librocksdb-sys"
-version = "6.6.4"
+version = "6.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e3b727e2dd20ec2fb7ed93f23d9fd5328a0871185485ebdaff007b47d3e27e4"
+checksum = "883213ae3d09bfc3d104aefe94b25ebb183b6f4d3a515b23b14817e1f4854005"
 dependencies = [
  "bindgen",
  "cc",
@@ -386,22 +386,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14b6052be84e6b71ab17edffc2eeabf5c2c3ae1fdb464aae35ac50c67a44e1f7"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "memcached-rust"
-version = "0.1.0"
-dependencies = [
- "byteorder",
- "bytes",
- "futures",
- "log",
- "nom",
- "rocksdb",
- "serde",
- "serde_yaml",
- "tokio",
- "tokio-util",
 ]
 
 [[package]]
@@ -591,10 +575,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fe5bd57d1d7414c6b5ed48563a2c855d995ff777729dcd91c369ec7fea395ae"
 
 [[package]]
+name = "rockscached"
+version = "0.1.0"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "futures",
+ "log",
+ "nom",
+ "rocksdb",
+ "serde",
+ "serde_yaml",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "rocksdb"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12069b106981c6103d3eab7dd1c86751482d0779a520b7c14954c8b586c1e643"
+checksum = "61aa17a99a2413cd71c1106691bf59dad7de0cd5099127f90e9d99c429c40d4a"
 dependencies = [
  "libc",
  "librocksdb-sys",
