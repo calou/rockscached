@@ -43,9 +43,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 0 => {
                                     return;
                                 }
-                                1024 => {
-                                    bytes_mut.put_slice(&buf);
-                                }
                                 n => {
                                     bytes_mut.put_slice(&buf[0..n]);
                                     if n < 1024 || (buf[1022] == b'\r' && buf[1023] == b'\n') {
