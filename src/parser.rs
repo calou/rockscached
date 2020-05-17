@@ -1,5 +1,5 @@
 use nom;
-
+use log::warn;
 use crate::command::Command;
 use nom::{
     IResult,
@@ -107,7 +107,7 @@ pub fn parse(input: &[u8]) -> Result<Command<'_>, String> {
             }
         }
         _ => {
-            println!("{}", String::from_utf8_lossy(input));
+            warn!("Unable to parse command `{:?}`", String::from_utf8_lossy(input));
             Err(String::from("Unable to parse command"))
         }
     }

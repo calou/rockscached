@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
-
+use log::error;
 use byteorder::{BigEndian, ByteOrder};
 use bytes::{Buf, BufMut, BytesMut};
 use rocksdb::{DB, DBCompressionType, Error, Options};
@@ -175,7 +175,7 @@ impl Database {
                             }
                         }
                         Err(e) => {
-                            println!("An error occured {}", e);
+                            error!("An error occured {}", e);
                             Response::Error {
                                 msg: Box::new(String::from("CLIENT_ERROR cannot increment or decrement non-numeric value\r\n"))
                             }

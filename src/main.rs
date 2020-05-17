@@ -1,15 +1,15 @@
 #![warn(rust_2018_idioms)]
+
 mod command;
 mod db;
 mod response;
 mod parser;
 mod byte_utils;
-
-use tokio::net::TcpListener;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
 use std::env;
 use std::error::Error;
+use log::{info, error};
+use tokio::net::TcpListener;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 
 use crate::db::Database;
@@ -19,19 +19,21 @@ use bytes::{BytesMut, BufMut, Buf};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    log4rs::init_file("log4rs.yml", Default::default()).unwrap();
+
     let addr = env::args()
         .nth(1)
         .unwrap_or_else(|| "127.0.0.1:8080".to_string());
 
     let mut listener = TcpListener::bind(&addr).await?;
-    println!("Listening on: {}", addr);
+    info!("Listening on: {}", addr);
 
     let db = Database::open("/tmp/rocksdb.db");
 
     loop {
         match listener.accept().await {
             Ok((mut socket, client_addr)) => {
-                println!("Establing connection with {:?}", client_addr);
+                info!("Establing connection with {:?}", client_addr);
                 let db = db.clone();
                 tokio::spawn(async move {
                     loop {
@@ -49,7 +51,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                         let response = Command::handle(bytes_mut.bytes(), &db);
                                         let response_bytes = response.serialize();
                                         if let Err(e) = socket.write_all(response_bytes.bytes()).await {
-                                            println!("error on sending response; error = {:?}", e);
+                                            error!("error on sending response; error = {:?}", e);
                                         }
                                     }
                                 }
@@ -58,7 +60,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     }
                 });
             }
-            Err(e) => println!("error accepting socket; error = {:?}", e),
+            Err(e) => error!("error accepting socket; error = {:?}", e),
         }
     }
 }

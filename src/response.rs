@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use log::error;
 
 #[derive(PartialEq)]
 pub enum Response {
@@ -25,7 +26,7 @@ impl Response {
             Response::NotStored => Bytes::from("NOT_STORED\r\n"),
             Response::NotImplemented => Bytes::from("NOT_IMPLEMENTED\r\n"),
             Response::Error {msg} => {
-                println!("{}", msg);
+                error!("{}", msg);
                 Bytes::from("ERROR\r\n")
             },
         }
