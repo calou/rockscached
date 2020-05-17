@@ -1,10 +1,12 @@
-use std::sync::{Mutex, Arc};
-use rocksdb::{DB, Options, DBCompressionType, Error};
-use crate::response::Response;
-use bytes::{BytesMut, BufMut, Buf};
+use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
-use byteorder::{ByteOrder, BigEndian};
+
+use byteorder::{BigEndian, ByteOrder};
+use bytes::{Buf, BufMut, BytesMut};
+use rocksdb::{DB, DBCompressionType, Error, Options};
+
 use crate::byte_utils::{convert_bytes_to_u64, u64_to_bytes};
+use crate::response::Response;
 
 #[derive(Debug)]
 struct DatabaseHolder {
@@ -13,8 +15,8 @@ struct DatabaseHolder {
 }
 
 impl DatabaseHolder {
-    fn increment_cas(& mut self) -> u64 {
-        self.cas +=1;
+    fn increment_cas(&mut self) -> u64 {
+        self.cas += 1;
         self.cas
     }
 }
@@ -30,7 +32,7 @@ impl Database {
         db_opts.set_max_write_buffer_number(16);
         db_opts.create_if_missing(true);
         let initial_db = DB::open(&db_opts, path).unwrap();
-        let dh = DatabaseHolder {rocksdb: initial_db, cas: 0};
+        let dh = DatabaseHolder { rocksdb: initial_db, cas: 0 };
         Arc::new(Database {
             mutex: Mutex::new(dh),
         })
@@ -42,7 +44,7 @@ impl Database {
         let rocksdb = &dh.rocksdb;
         for key in keys {
             match rocksdb.get(key) {
-                Ok(Some(value)) => append_get_response(key, &value, &mut bytes_mut,include_cas),
+                Ok(Some(value)) => process_get_request(key, &value, &mut bytes_mut, include_cas),
                 _ => ()
             };
         }
@@ -62,7 +64,14 @@ impl Database {
         let dh = self.mutex.lock().unwrap();
         let rocksdb = &dh.rocksdb;
         match rocksdb.get(key) {
-            Ok(Some(value)) => Some(value[18..].to_vec()),
+            Ok(Some(value)) => {
+                let expiration = BigEndian::read_u64(&value[0..8]);
+                if expiration > current_second() {
+                    Some(value[20..].to_vec())
+                } else {
+                    None
+                }
+            },
             _ => None,
         }
     }
@@ -108,7 +117,7 @@ impl Database {
 
     fn insert_raw(&self, key: &[u8], deadline_bytes: &[u8], flag_bytes: &[u8], value: &[u8]) -> Response {
         let mut dh = self.mutex.lock().unwrap();
-        let cas  = dh.increment_cas();
+        let cas = dh.increment_cas();
         let mut bytes_mut = BytesMut::with_capacity(18 + value.len());
         bytes_mut.put_slice(deadline_bytes);
         bytes_mut.put_u64(cas);
@@ -119,7 +128,6 @@ impl Database {
         match rocksdb.put(key, bytes_mut.bytes()) {
             Ok(_) => Response::Stored,
             _ => Response::ServerError
-
         }
     }
 
@@ -193,18 +201,18 @@ fn finish_get_response(bytes_mut: &mut BytesMut) -> Response {
     }
 }
 
-fn append_get_response(key: &[u8], value: &[u8], bytes_mut: &mut BytesMut, include_cas:bool) {
+fn process_get_request(key: &[u8], value: &[u8], bytes_mut: &mut BytesMut, include_cas: bool) {
     let expiration = BigEndian::read_u64(&value[0..8]);
     if expiration > current_second() {
         let cas = match include_cas {
             true => Some(BigEndian::read_u64(&value[8..16])),
             _ => None
         };
-        append_raw_get_response(key, cas, &value[16..20], &value[20..], bytes_mut);
+        append_get_response(key, cas, &value[16..20], &value[20..], bytes_mut);
     }
 }
 
-fn append_raw_get_response(key: &[u8], cas: Option<u64>, flag_bytes: &[u8], data_bytes: &[u8], bytes_mut: &mut BytesMut) {
+fn append_get_response(key: &[u8], cas: Option<u64>, flag_bytes: &[u8], data_bytes: &[u8], bytes_mut: &mut BytesMut) {
     let flag = BigEndian::read_u32(flag_bytes);
     let length = data_bytes.len() as u32;
     bytes_mut.put_slice(b"VALUE ");
