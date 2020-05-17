@@ -165,7 +165,6 @@ mod tests {
         assert_eq!(result.unwrap(), Command::Set { key: b"myKey", flags: 0, ttl: 60u64, value: b"the value to store" });
     }
 
-
     #[test]
     fn parse_for_set2() {
         let result = parse(b"set k336 0 1000 4\r\nv336\r\n");
