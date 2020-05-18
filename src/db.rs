@@ -1,9 +1,9 @@
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
-use log::error;
+use log::{trace,error,warn};
 use byteorder::{BigEndian, ByteOrder};
 use bytes::{Buf, BufMut, BytesMut};
-use rocksdb::{DB, DBCompressionType, Error, Options};
+use rocksdb::{DB, DBCompressionType, Error, Options, IteratorMode};
 
 use crate::byte_utils::{convert_bytes_to_u64, u64_to_bytes};
 use crate::response::Response;
@@ -95,7 +95,7 @@ impl Database {
             bytes_mut.put_slice(appendage);
             bytes_mut.bytes().to_vec()
         };
-        self.update_combined(key, flags, ttl, value, f)
+        self.update_value(key, flags, ttl, value, f)
     }
 
     pub fn prepend(&self, key: &[u8], flags: u32, ttl: u64, value: &[u8]) -> Response {
@@ -105,7 +105,7 @@ impl Database {
             bytes_mut.put_slice(&original);
             bytes_mut.bytes().to_vec()
         };
-        self.update_combined(key, flags, ttl, value, f)
+        self.update_value(key, flags, ttl, value, f)
     }
 
     fn insert_with_deadline(&self, key: &[u8], flags: u32, deadline: u64, value: &[u8]) -> Response {
@@ -131,7 +131,7 @@ impl Database {
         }
     }
 
-    fn update_combined<'a, I>(&self, key: &[u8], flags: u32, ttl: u64, value: &'a [u8], f: I) -> Response
+    fn update_value<'a, I>(&self, key: &[u8], flags: u32, ttl: u64, value: &'a [u8], f: I) -> Response
         where I: Fn(Vec<u8>, &'a [u8]) -> Vec<u8>
     {
         match self.get_raw_value(key) {
@@ -191,6 +191,24 @@ impl Database {
         let dh = self.mutex.lock().unwrap();
         let rocksdb = &dh.rocksdb;
         rocksdb.get(key)
+    }
+
+    pub fn delete_expired(&self) -> u32 {
+        let mut dh = self.mutex.lock().unwrap();
+        let rocksdb = &dh.rocksdb;
+        let iterator = rocksdb.full_iterator(IteratorMode::Start);
+        let mut deleted: u32 = 0;
+        for item in iterator {
+            let expiration = BigEndian::read_u64(&item.1[0..8]);
+            if expiration < current_second() {
+                let key = item.0;
+                match rocksdb.delete(key){
+                    Ok(()) => deleted +=1 ,
+                    _ => warn!("Can not delete key {:?}", key)
+                };
+            }
+        }
+        deleted
     }
 }
 
