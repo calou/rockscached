@@ -193,6 +193,7 @@ impl Database {
         rocksdb.get(key)
     }
 
+
     pub fn delete_expired(&self) -> u32 {
         let mut dh = self.mutex.lock().unwrap();
         let rocksdb = &dh.rocksdb;
@@ -202,7 +203,7 @@ impl Database {
             let expiration = BigEndian::read_u64(&item.1[0..8]);
             if expiration < current_second() {
                 let key = item.0;
-                match rocksdb.delete(key){
+                match rocksdb.delete(key.clone()){
                     Ok(()) => deleted +=1 ,
                     _ => warn!("Can not delete key {:?}", key)
                 };

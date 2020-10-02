@@ -1,10 +1,5 @@
 #![warn(rust_2018_idioms)]
 
-mod command;
-mod db;
-mod response;
-mod parser;
-mod byte_utils;
 
 use std::error::Error;
 use log::{info, error};
@@ -13,8 +8,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use clap::{Arg, App};
 use bytes::{BytesMut, BufMut, Buf};
 
-use crate::db::Database;
-use crate::command::Command;
+use rockscached_db::db::Database;
+use rockscached_db::command::Command;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -43,12 +38,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let addr = matches.value_of("address").unwrap_or("127.0.0.1:8080");
 
     let mut listener = TcpListener::bind(&addr).await?;
-    info!("Listening on: {}", addr);
-
     let database_directory = matches.value_of("db_dir").unwrap_or("/tmp/rocksdb");
+    info!("Listening on: {}", addr);
     info!("Storing data in {}", database_directory);
     let db = Database::open(database_directory);
-
     loop {
         match listener.accept().await {
             Ok((mut socket, client_addr)) => {
